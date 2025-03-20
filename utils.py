@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from gtts import gTTS
+from googletrans import Translator
 
 # Ensure necessary NLTK data is downloaded
 nltk.download('vader_lexicon')
@@ -28,7 +29,6 @@ retries = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
 adapter = HTTPAdapter(max_retries=retries)
 session.mount("http://", adapter)
 session.mount("https://", adapter)
-
 
 def extract_publication_date(soup: BeautifulSoup) -> str:
     """
@@ -59,7 +59,6 @@ def extract_publication_date(soup: BeautifulSoup) -> str:
             date = time_tag.get("datetime", "").strip() or time_tag.get_text().strip()
             logger.debug(f"Publication date found in <time> tag: {date}")
     return date
-
 
 def scrape_news(url: str) -> Optional[Dict[str, Any]]:
     """
@@ -107,7 +106,6 @@ def scrape_news(url: str) -> Optional[Dict[str, Any]]:
     logger.debug(f"Scraped article data: {article_data}")
     return article_data
 
-
 def analyze_sentiment(text: str) -> Tuple[str, Dict[str, float]]:
     """
     Analyzes sentiment of the provided text using NLTK's VADER.
@@ -130,28 +128,33 @@ def analyze_sentiment(text: str) -> Tuple[str, Dict[str, float]]:
     logger.debug(f"Analyzed sentiment for text. Scores: {scores}, Label: {sentiment}")
     return sentiment, scores
 
-
 def generate_tts(text: str, lang: str = "hi", filename: str = "sentiment_report_hi.mp3") -> str:
     """
-    Converts the given text into a TTS audio file.
+    Translates the given text to Hindi and converts it into a TTS audio file.
     
     Args:
-        text (str): Text to convert to speech.
-        lang (str): Language code for the TTS (default is Hindi "hi").
-        filename (str): Output filename for the generated audio.
+        text (str): The original text (in English).
+        lang (str): Target language for TTS (default is 'hi' for Hindi).
+        filename (str): The output filename for the audio file.
         
     Returns:
-        str: Filename of the generated audio file.
+        str: The filename of the generated TTS audio file.
     """
     try:
-        tts = gTTS(text=text, lang=lang)
+        translator = Translator()
+        # Translate the text to Hindi
+        translated = translator.translate(text, dest=lang)
+        hindi_text = translated.text
+        logger.info(f"Translated text to Hindi: {hindi_text}")
+        
+        # Generate TTS using the translated Hindi text
+        tts = gTTS(text=hindi_text, lang=lang)
         tts.save(filename)
         logger.info(f"TTS audio generated and saved to {filename}")
         return filename
     except Exception as e:
         logger.error(f"Error generating TTS: {e}")
         raise e
-
 
 def process_articles() -> Tuple[List[Dict[str, Any]], Dict[str, int], str, str]:
     """
@@ -211,7 +214,7 @@ def process_articles() -> Tuple[List[Dict[str, Any]], Dict[str, int], str, str]:
     )
     logger.info("Comparative report generated.")
 
-    # Generate Hindi TTS audio report
+    # Generate Hindi TTS audio report from the comparative report
     tts_file = generate_tts(comparative_report, lang="hi", filename="sentiment_report_hi.mp3")
     
     return articles, sentiment_counts, comparative_report, tts_file
