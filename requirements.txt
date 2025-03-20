@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+streamlit
+requests
+beautifulsoup4
+nltk
+gTTS
+altair
+pandas
