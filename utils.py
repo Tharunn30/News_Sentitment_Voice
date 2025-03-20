@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from gtts import gTTS
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 
 # Ensure necessary NLTK data is downloaded
 nltk.download('vader_lexicon')
@@ -141,10 +141,8 @@ def generate_tts(text: str, lang: str = "hi", filename: str = "sentiment_report_
         str: The filename of the generated TTS audio file.
     """
     try:
-        translator = Translator()
-        # Translate the text to Hindi
-        translated = translator.translate(text, dest=lang)
-        hindi_text = translated.text
+        # Translate the text to Hindi using deep-translator
+        hindi_text = GoogleTranslator(source='auto', target='hi').translate(text)
         logger.info(f"Translated text to Hindi: {hindi_text}")
         
         # Generate TTS using the translated Hindi text
