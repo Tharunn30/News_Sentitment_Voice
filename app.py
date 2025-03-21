@@ -1,72 +1,48 @@
-import asyncio
-import logging
-import os
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+import gradio as gr
 from utils import process_articles
 
-# Setup logging configuration
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+def generate_report(company_name: str):
+    """
+    This function processes the news articles and generates:
+      - A comparative report,
+      - Sentiment distribution,
+      - Formatted article details,
+      - And the TTS audio file path.
+    The input company_name is not used in processing (as URLs are predefined)
+    but is displayed in the output.
+    """
+    articles, sentiment_counts, comparative_report, tts_file = process_articles()
+    
+    # Format articles for display
+    articles_formatted = ""
+    for article in articles:
+        articles_formatted += f"Title: {article['title']}\n"
+        articles_formatted += f"Summary: {article['summary']}\n"
+        articles_formatted += f"Publication Date: {article['publication_date']}\n"
+        articles_formatted += f"Sentiment: {article['sentiment']}\n"
+        articles_formatted += f"URL: {article['url']}\n"
+        articles_formatted += "-------------------------------\n"
+    
+    # Format sentiment counts as a string
+    sentiment_text = "Sentiment Distribution:\n"
+    for sentiment, count in sentiment_counts.items():
+        sentiment_text += f"{sentiment}: {count}\n"
+    
+    return comparative_report, sentiment_text, articles_formatted, tts_file
 
-# Initialize FastAPI app with metadata
-app = FastAPI(
-    title="Advanced News Summarization & Sentiment Analysis API",
-    description="An advanced API that processes news articles, performs sentiment analysis, and generates a Hindi TTS audio report.",
-    version="2.0.0"
+# Define Gradio Interface
+iface = gr.Interface(
+    fn=generate_report,
+    inputs=gr.Textbox(label="Company Name", placeholder="Enter Company Name (e.g., Tesla)"),
+    outputs=[
+        gr.Textbox(label="Comparative Report"),
+        gr.Textbox(label="Sentiment Distribution"),
+        gr.Textbox(label="Articles"),
+        gr.Audio(label="Hindi TTS Audio", type="filepath")
+    ],
+    title="NewsSentimentVoice",
+    description="Extracts news articles, performs sentiment analysis, and generates a Hindi TTS audio report."
 )
-
-# Enable CORS for all origins (customize as needed for production)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Adjust this list to restrict origins in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Define a Pydantic model for the incoming request payload
-class NewsRequest(BaseModel):
-    company_name: str
-
-# Health check endpoint
-@app.get("/health", summary="Health Check Endpoint")
-async def health_check():
-    return {"status": "ok", "message": "Service is healthy."}
-
-# Endpoint to process news articles and generate the sentiment report
-@app.post("/api/process-news", summary="Process news articles and generate sentiment report")
-async def process_news(request: NewsRequest):
-    try:
-        # Run the blocking process_articles function asynchronously
-        articles, sentiment_counts, comparative_report, tts_file = await asyncio.to_thread(process_articles)
-        response = {
-            "company": request.company_name,
-            "articles": articles,
-            "sentiment_counts": sentiment_counts,
-            "comparative_report": comparative_report,
-            "tts_file": tts_file
-        }
-        return JSONResponse(content=response)
-    except Exception as e:
-        logger.exception("Error processing news articles")
-        raise HTTPException(status_code=500, detail=f"Error processing news: {str(e)}")
-
-# Endpoint to download the generated Hindi TTS audio file
-@app.get("/api/tts", summary="Download the generated Hindi TTS audio file")
-async def get_tts():
-    tts_path = "sentiment_report_hi.mp3"
-    if os.path.exists(tts_path):
-        return FileResponse(
-            path=tts_path,
-            media_type="audio/mpeg",
-            filename="sentiment_report_hi.mp3"
-        )
-    else:
-        raise HTTPException(status_code=404, detail="TTS audio file not found")
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+    iface.launch()
