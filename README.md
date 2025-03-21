@@ -1,4 +1,3 @@
-```md
 # NewsSentimentVoice
 
 **NewsSentimentVoice** is a web-based application that extracts news articles from multiple sources, performs sentiment analysis, and generates a comparative sentiment report. The report is then translated to Hindi and converted into a TTS (text-to-speech) audio file. The application also sorts articles by their relevance to a provided company name using fuzzy matching.
@@ -57,15 +56,9 @@ In today's fast-paced digital world, staying updated with news is essential. **N
 ### Steps
 
 1. **Clone the Repository:**
-   ```bash
+  ```bash
    git clone https://github.com/your-username/NewsSentimentVoice.git
    cd NewsSentimentVoice
-
-
-2. **Create and Activate a Virtual Environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. **Install Dependencies:**
