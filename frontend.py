@@ -1,66 +1,46 @@
-import streamlit as st
-import requests
-import pandas as pd
-import altair as alt
+import gradio as gr
+from utils import process_articles
 
-# Set the page configuration for a wider layout and a custom title
-st.set_page_config(page_title="News Sentiment Dashboard", layout="wide")
+def generate_report(company_name: str):
+    """
+    Processes news articles based on the provided company name and returns:
+      - A comparative sentiment report,
+      - A sentiment distribution summary,
+      - Detailed article information,
+      - And the file path to the generated Hindi TTS audio.
+    Articles are sorted by relevance using fuzzy matching with the company name.
+    """
+    articles, sentiment_counts, comparative_report, tts_file = process_articles(company_name)
+    
+    # Format articles for display
+    articles_text = ""
+    for article in articles:
+        articles_text += f"Title: {article['title']}\n"
+        articles_text += f"Summary: {article['summary']}\n"
+        articles_text += f"Publication Date: {article['publication_date']}\n"
+        articles_text += f"Sentiment: {article['sentiment']}\n"
+        articles_text += f"Relevance Score: {article['relevance']}\n"
+        articles_text += f"URL: {article['url']}\n"
+        articles_text += "-------------------------\n"
+    
+    sentiment_text = "Sentiment Distribution:\n"
+    for sentiment, count in sentiment_counts.items():
+        sentiment_text += f"{sentiment}: {count}\n"
+    
+    return comparative_report, sentiment_text, articles_text, tts_file
 
-# Sidebar for user inputs
-st.sidebar.title("News Sentiment Dashboard")
-company = st.sidebar.text_input("Enter Company Name", "X")
+iface = gr.Interface(
+    fn=generate_report,
+    inputs=gr.Textbox(label="Company Name", placeholder="Enter Company Name (e.g., Tesla)"),
+    outputs=[
+        gr.Textbox(label="Comparative Report"),
+        gr.Textbox(label="Sentiment Distribution"),
+        gr.Textbox(label="Articles"),
+        gr.Audio(label="Hindi TTS Audio", type="filepath")
+    ],
+    title="NewsSentimentVoice",
+    description="Extracts news articles, performs sentiment analysis, and generates a Hindi TTS audio report. Articles are sorted by relevance to the searched company."
+)
 
-if st.sidebar.button("Generate Report"):
-    with st.spinner("Fetching and processing news..."):
-        payload = {"company_name": company}
-        try:
-            # Make sure to update the URL if your API endpoint changes
-            response = requests.post("http://localhost:8000/api/process-news", json=payload)
-            if response.status_code == 200:
-                data = response.json()
-                st.success("Report generated successfully!")
-                
-                # Create three tabs: Comparative Report, Articles, and Audio Report
-                tab1, tab2, tab3 = st.tabs(["Comparative Report", "Articles", "Audio Report"])
-                
-                with tab1:
-                    st.header("Comparative Sentiment Report")
-                    st.text(data["comparative_report"])
-                    
-                    st.header("Sentiment Distribution")
-                    sentiment_counts = data["sentiment_counts"]
-                    # Create a DataFrame for the sentiment counts
-                    df = pd.DataFrame({
-                        "Sentiment": list(sentiment_counts.keys()),
-                        "Count": list(sentiment_counts.values())
-                    })
-                    # Create an interactive Altair bar chart
-                    chart = alt.Chart(df).mark_bar().encode(
-                        x=alt.X("Sentiment", sort=None),
-                        y="Count",
-                        color="Sentiment"
-                    ).properties(width=600)
-                    st.altair_chart(chart, use_container_width=True)
-                
-                with tab2:
-                    st.header("News Articles")
-                    # Display each article within an expander for a cleaner view
-                    for article in data["articles"]:
-                        with st.expander(article["title"]):
-                            st.markdown(f"**Summary:** {article['summary']}")
-                            st.markdown(f"**Publication Date:** {article['publication_date']}")
-                            st.markdown(f"**Sentiment:** {article['sentiment']}")
-                            st.markdown(f"[Read full article]({article['url']})")
-                
-                with tab3:
-                    st.header("Hindi Audio Report")
-                    try:
-                        with open(data["tts_file"], 'rb') as audio_file:
-                            audio_bytes = audio_file.read()
-                        st.audio(audio_bytes, format='audio/mp3')
-                    except Exception as e:
-                        st.error(f"Error loading audio: {e}")
-            else:
-                st.error("Error fetching data from the API.")
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+if __name__ == "__main__":
+    iface.launch()
