@@ -9,6 +9,7 @@ import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from gtts import gTTS
 from deep_translator import GoogleTranslator
+from rapidfuzz import fuzz  # For fuzzy matching
 
 # Ensure necessary NLTK data is downloaded
 nltk.download('vader_lexicon')
@@ -20,9 +21,9 @@ logger = logging.getLogger(__name__)
 # Create a persistent session with retries and custom headers
 session = requests.Session()
 headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) "
-                  "Chrome/90.0.4430.93 Safari/537.36"
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                   "AppleWebKit/537.36 (KHTML, like Gecko) "
+                   "Chrome/90.0.4430.93 Safari/537.36")
 }
 session.headers.update(headers)
 retries = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
@@ -33,12 +34,6 @@ session.mount("https://", adapter)
 def extract_publication_date(soup: BeautifulSoup) -> str:
     """
     Attempts to extract the publication date from common meta tags or time elements.
-    
-    Args:
-        soup (BeautifulSoup): Parsed HTML of the article.
-        
-    Returns:
-        str: Publication date string if found; otherwise, an empty string.
     """
     date = ""
     meta_props = [
@@ -63,14 +58,6 @@ def extract_publication_date(soup: BeautifulSoup) -> str:
 def scrape_news(url: str) -> Optional[Dict[str, Any]]:
     """
     Scrapes a news article from a given URL and extracts key details.
-    
-    Args:
-        url (str): The URL of the news article.
-        
-    Returns:
-        Optional[Dict[str, Any]]: Dictionary containing title, summary,
-                                  publication_date, and url if successful;
-                                  otherwise, None.
     """
     try:
         response = session.get(url, timeout=10)
@@ -81,11 +68,8 @@ def scrape_news(url: str) -> Optional[Dict[str, Any]]:
         return None
 
     soup = BeautifulSoup(response.text, 'html.parser')
-
-    # Extract title
     title = soup.title.text.strip() if soup.title else "No Title Found"
     
-    # Extract summary: use meta description or first paragraph as fallback
     summary = ""
     meta_desc = soup.find("meta", {"name": "description"})
     if meta_desc and meta_desc.get("content"):
@@ -96,7 +80,6 @@ def scrape_news(url: str) -> Optional[Dict[str, Any]]:
             summary = first_paragraph.get_text().strip()
 
     publication_date = extract_publication_date(soup)
-    
     article_data = {
         "title": title,
         "summary": summary,
@@ -109,13 +92,6 @@ def scrape_news(url: str) -> Optional[Dict[str, Any]]:
 def analyze_sentiment(text: str) -> Tuple[str, Dict[str, float]]:
     """
     Analyzes sentiment of the provided text using NLTK's VADER.
-    
-    Args:
-        text (str): Text to analyze.
-        
-    Returns:
-        Tuple[str, Dict[str, float]]: A tuple containing the sentiment label
-                                       (Positive/Negative/Neutral) and the raw scores.
     """
     sid = SentimentIntensityAnalyzer()
     scores = sid.polarity_scores(text)
@@ -131,21 +107,10 @@ def analyze_sentiment(text: str) -> Tuple[str, Dict[str, float]]:
 def generate_tts(text: str, lang: str = "hi", filename: str = "sentiment_report_hi.mp3") -> str:
     """
     Translates the given text to Hindi and converts it into a TTS audio file.
-    
-    Args:
-        text (str): The original text (in English).
-        lang (str): Target language for TTS (default is 'hi' for Hindi).
-        filename (str): The output filename for the audio file.
-        
-    Returns:
-        str: The filename of the generated TTS audio file.
     """
     try:
-        # Translate the text to Hindi using deep-translator
         hindi_text = GoogleTranslator(source='auto', target='hi').translate(text)
         logger.info(f"Translated text to Hindi: {hindi_text}")
-        
-        # Generate TTS using the translated Hindi text
         tts = gTTS(text=hindi_text, lang=lang)
         tts.save(filename)
         logger.info(f"TTS audio generated and saved to {filename}")
@@ -154,34 +119,27 @@ def generate_tts(text: str, lang: str = "hi", filename: str = "sentiment_report_
         logger.error(f"Error generating TTS: {e}")
         raise e
 
-def process_articles() -> Tuple[List[Dict[str, Any]], Dict[str, int], str, str]:
+def process_articles(company_name: str) -> Tuple[List[Dict[str, Any]], Dict[str, int], str, str]:
     """
     Processes a list of predefined news article URLs:
     - Scrapes each article,
     - Performs sentiment analysis on its summary,
     - Aggregates sentiment counts,
+    - Sorts articles by relevance using fuzzy matching with the provided company name,
     - Generates a comparative sentiment report,
     - Generates a Hindi TTS audio report.
-    
-    Returns:
-        Tuple containing:
-            - List of article data dictionaries,
-            - Dictionary of sentiment counts,
-            - Comparative report as a string,
-            - Filename of the generated TTS audio file.
     """
-    # Predefined list of news article URLs
     news_urls = [
-        "https://indianexpress.com/article/india/it-ministry-grok-using-hindi-slang-abuses-x-9895705/",
-        "https://indianexpress.com/article/world/trump-musk-french-scientist-denied-us-entry-9896678/",
-        "https://indianexpress.com/article/sports/ipl/ipl-18-franchises-fan-promos-reels-movie-bgm-videos-csk-rcb-mi-kkr-9895794/",
-        "https://indianexpress.com/article/sports/ipl/thanks-to-ipl-new-zealand-cleared-the-final-frontier-9893966/",
-        "https://indianexpress.com/article/sports/chess/vidit-gujrathi-wins-freestyle-chess-where-preparations-seldom-matter-9893401/",
-        "https://www.thehindu.com/news/national/indian-student-at-georgetown-university-detained-over-hamas-links-amid-trumps-crackdown-on-pro-palestinian-protests/article69351904.ece",
-        "https://www.timesnownews.com/chennai/chennai-water-cut-temporary-disruption-from-march-21-26-check-list-of-affected-areas-article-119252341",
-        "https://timesofindia.indiatimes.com/sports/formula-one/news/f1-pandit-eddie-jordan-who-managed-adrian-neweys-move-to-aston-martin-dies-of-cancer/articleshow/119251176.cms",
-        "https://www.dtnext.in/news/business/cognizant-to-establish-14-acre-immersive-learning-center-at-siruseri-campus-chennai-827024",
-        "https://www.dtnext.in/news/chennai/four-flights-cancelled-at-chennai-airport-due-to-passenger-shortage-826702"
+        "https://www.livemint.com/companies/start-ups/googles-cybersecurity-deal-spins-tiny-investment-into-4-billion-windfall-11742533799922.html",
+        "https://www.cnbc.com/2025/03/19/nvidia-ceo-jensen-huang-why-deepseek-model-needs-100-times-more-computing.html",
+        "https://www.news18.com/tech/nothing-phone-3a-tells-us-why-the-pro-doesnt-need-to-have-all-the-fun-9268839.html",
+        "https://www.businesstoday.in/markets/stocks/story/ola-electric-shares-climb-8-today-is-this-ev-stock-a-short-term-buy-468771-2025-03-21",
+        "https://www.businesstoday.in/markets/stocks/story/hindustan-construction-company-shares-zoomed-13-today-heres-why-468759-2025-03-21",
+        "https://economictimes.indiatimes.com/industry/renewables/tata-group-partners-with-tesla-a-new-era-for-indian-electric-vehicle-supply-chains/articleshow/119270573.cms?from=mdr",
+        "https://www.thehindu.com/sci-tech/technology/gadgets/lenovo-idea-tab-pro-with-144-hz-refresh-rate-panel-bundled-stylus-launched-in-india/article69343365.ece",
+        "https://news.adobe.com/news/2025/03/adobe-and-microsoft-empower-marketers-with-ai-agents-in-microsoft-365-copilot",
+        "https://www.newsbytesapp.com/news/science/musks-xai-joins-microsoft-backed-ai-consortium-deepening-rivalry-with-openai/story",
+        "https://indianexpress.com/article/technology/tech-news-technology/what-is-wiz-why-is-google-acquiring-for-32-billion-9895135/"
     ]
     
     articles = []
@@ -191,7 +149,6 @@ def process_articles() -> Tuple[List[Dict[str, Any]], Dict[str, int], str, str]:
         article_data = scrape_news(url)
         if article_data is None:
             continue
-        # Ensure there is sufficient text to analyze
         if not article_data["summary"] or len(article_data["summary"]) < 20:
             logger.warning(f"Article summary too short or missing for URL: {url}")
             continue
@@ -202,7 +159,15 @@ def process_articles() -> Tuple[List[Dict[str, Any]], Dict[str, int], str, str]:
         sentiment_counts[sentiment] += 1
         articles.append(article_data)
     
-    # Create a comparative report
+    # Compute a relevance score using fuzzy matching.
+    # We use token_set_ratio to measure similarity between the company name and article content.
+    for article in articles:
+        combined_text = article["title"] + " " + article["summary"]
+        article["relevance"] = fuzz.token_set_ratio(company_name.lower(), combined_text.lower())
+    
+    # Sort articles in descending order of relevance (i.e. higher score means more relevant)
+    articles = sorted(articles, key=lambda x: x["relevance"], reverse=True)
+    
     comparative_report = (
         "Comparative Analysis:\n"
         f"Total Articles: {len(articles)}\n"
@@ -211,8 +176,6 @@ def process_articles() -> Tuple[List[Dict[str, Any]], Dict[str, int], str, str]:
         f"Neutral: {sentiment_counts['Neutral']}\n"
     )
     logger.info("Comparative report generated.")
-
-    # Generate Hindi TTS audio report from the comparative report
     tts_file = generate_tts(comparative_report, lang="hi", filename="sentiment_report_hi.mp3")
     
     return articles, sentiment_counts, comparative_report, tts_file
