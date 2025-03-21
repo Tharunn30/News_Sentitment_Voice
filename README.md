@@ -60,7 +60,7 @@ In today's fast-paced digital world, staying updated with news is essential. **N
    ```bash
    git clone https://github.com/your-username/NewsSentimentVoice.git
    cd NewsSentimentVoice
-   ```
+
 
 2. **Create and Activate a Virtual Environment:**
    ```bash
