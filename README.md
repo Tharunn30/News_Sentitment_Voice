@@ -1,4 +1,4 @@
-# NewsSentimentVoice
+# News Sentiment Voice
 
 **NewsSentimentVoice** is a web-based application that extracts news articles from multiple sources, performs sentiment analysis, and generates a comparative sentiment report. The report is then translated to Hindi and converted into a TTS (text-to-speech) audio file. The application also sorts articles by their relevance to a provided company name using fuzzy matching.
 
